@@ -1,0 +1,309 @@
+# AI 工具安装器
+> 基于 Tauri v2 + React 18 的桌面应用，一键检测、安装、升级、卸载与启动多种 AI 编程 CLI 工具。
+
+## 文档生成依据
+本 README 由发布工具 `github-open-source-publisher` 的 `generate_readme.py` 依据本地事实清单 `project_facts.json` 渲染（工具脚本与事实清单不随本仓库发布）。生成器会重新遍历项目并比对源码指纹，指纹不一致直接退出，不允许基于陈旧事实写文档。
+| 项 | 值 |
+| --- | --- |
+| 事实清单生成时间 (UTC) | `2026-11-07T21:29:50+00:00` |
+| 源码指纹 SHA-256 | `d3d0d6d663dc92628b0bff61eee8e40598f7c6e3270274a124f2aeb934782d70` |
+| 纳入统计的文件数 | 33 |
+| 源码字节数（不含文档产物） | 597023 |
+| 项目目录名 | `ai-cli-installer` |
+| 语言分布 | JSON 9 个、TypeScript 6 个、Rust 4 个、Other 3 个、Binary 2 个、JavaScript 2 个、Markdown 2 个、CSS 1 个、GitIgnore 1 个、HTML 1 个、TOML 1 个、YAML 1 个 |
+
+指纹计算排除 `README.md` 与 `project_facts.json` 本身（它们是产物），否则会出现「改文档→指纹失效→又要改文档」的死循环。
+
+## 项目简介
+AI 工具安装器把多种 AI 编程 CLI 工具的检测、安装、升级、卸载和启动收进一个桌面窗口。`src-tauri/tauri.conf.json` 中 `productName` 为「AI 工具安装器」、`identifier` 为 `com.claude.installer`，主窗口 900×600、可缩放、居中显示。
+前端是 React 18 + TypeScript + Tailwind CSS + Vite，通过 `@tauri-apps/api` 的 `invoke()` 调用 Rust 后端；后端命令集中在 `src-tauri/src/commands.rs`，在 `src-tauri/src/lib.rs` 的 `invoke_handler` 注册，均为 `async` + `spawn_blocking`，避免安装过程阻塞 UI。
+Windows 下所有 `std::process::Command` 调用经 `cmd /C` 包装并附加 `CREATE_NO_WINDOW` (`0x08000000`) 标志，安装/检测时不会弹出控制台窗口；非 Windows 平台直接执行命令。
+项目自带 `CLAUDE.md` 作为 Claude Code 的工作指引，界面采用深色主题（`surface-0` #0d0d0d 至 `surface-4` #383838，主色 `accent` #d4a574）。
+
+以上描述来自项目内已有文档或发布配置，不是生成器臆造。
+
+## 功能特性
+- 自动检测已安装工具的当前版本，并通过 `npm view <package> version` 查询最新版本，版本不一致时显示升级按钮
+- 支持单独安装、一键升级、批量安装、卸载与直接打开工具，右侧面板实时显示安装日志
+- 9 个可管理对象：Claude Code、OpenAI Codex、Gemini CLI、OpenCode、OpenClaw、Hermes、MiMo Code、Kilo Code、CC-Switch
+- 依赖工具 Git / Node.js 单独检测与安装（`install_git` / `install_node`）
+- npm 包类工具走通用 `install_npm_package()` / `uninstall_npm_package()`，Hermes 走 GitHub 脚本，CC-Switch 下载 `.msi`
+- CC-Switch 支持自动查找安装路径与自定义安装位置（`find_ccswitch_path`）
+- 四个 Tauri 命令：`check_tool` / `install_tool` / `uninstall_tool` / `open_tool`
+- 生产构建使用 NSIS 打包，产物位于 `src-tauri/target/release/bundle/nsis/`
+
+## 支持的工具
+| 工具 | id | 安装方式 | 命令/包 |
+| --- | --- | --- | --- |
+| Claude Code | `claude` | npm 全局安装 | `@anthropic-ai/claude-code` |
+| OpenAI Codex | `codex` | npm 全局安装 | `@openai/codex` |
+| Gemini CLI | `gemini` | npm 全局安装 | `@google/gemini-cli` |
+| OpenCode | `opencode` | npm 全局安装 | `opencode-ai@latest` |
+| OpenClaw | `openclaw` | npm 全局安装 | `openclaw@latest` |
+| Hermes | `hermes` | GitHub 脚本安装 | `hermes chat` |
+| MiMo Code | `mimo` | npm 全局安装 | `@mimo-ai/cli` |
+| Kilo Code | `kilocode` | npm 全局安装 | `@kilocode/cli` |
+| CC-Switch | `ccswitch` | 下载 `.msi` 安装 | 桌面应用（自动查找路径） |
+
+上表由 `src-tauri/src/commands.rs` 的 `match tool.as_str()` 分支与 `src/components/Installer.tsx` 的 `initialSteps` 逐条对照得出；`git` 与 `node` 作为依赖项单独检测，不计入上表。
+
+新增工具需改两处：`commands.rs` 中添加 `check_*` 并在 `check_tool` / `install_tool` / `uninstall_tool` / `open_tool` 的 match 中注册；`Installer.tsx` 的 `initialSteps` 数组中添加 `id` / `name` / `description` / `icon` 条目。
+
+## 技术栈
+| 层 | 组件 | 依据 |
+| --- | --- | --- |
+| 前端 | React 18、TypeScript、Tailwind CSS 3、Vite 7、lucide-react、Radix UI | `package.json` |
+| 后端 | Rust 2021 edition、Tauri v2、tauri-plugin-shell、serde、serde_json、tokio | `src-tauri/Cargo.toml` |
+| 包管理 | pnpm（`pnpm-lock.yaml`） | 锁文件 |
+| 打包 | NSIS | `src-tauri/tauri.conf.json` 的 `bundle.targets` |
+
+`package.json` 的 `name` 为 `claude-installer`、`version` 为 `1.0.0`；`src-tauri/Cargo.toml` 同名同版本，lib 名为 `claude_installer_lib`，crate-type 为 `staticlib` / `cdylib` / `rlib`。
+
+## 目录结构
+```text
+├── public/
+│   └── vite.svg
+├── src-tauri/
+│   ├── capabilities/
+│   │   └── default.json
+│   ├── gen/
+│   │   └── schemas/
+│   │       ├── acl-manifests.json
+│   │       ├── capabilities.json
+│   │       ├── desktop-schema.json
+│   │       └── windows-schema.json
+│   ├── icons/
+│   │   ├── icon.ico
+│   │   └── icon.png
+│   ├── src/
+│   │   ├── commands.rs
+│   │   ├── lib.rs
+│   │   └── main.rs
+│   ├── Cargo.lock
+│   ├── Cargo.toml
+│   ├── build.rs
+│   └── tauri.conf.json
+├── src/
+│   ├── components/
+│   │   └── Installer.tsx
+│   ├── lib/
+│   │   └── utils.ts
+│   ├── App.tsx
+│   ├── index.css
+│   ├── main.tsx
+│   └── vite-env.d.ts
+├── .gitignore
+├── CLAUDE.md
+├── LICENSE
+├── README.md
+├── index.html
+├── package.json
+├── pnpm-lock.yaml
+├── postcss.config.js
+├── tailwind.config.js
+├── tsconfig.json
+├── tsconfig.node.json
+└── vite.config.ts
+```
+
+## 模块职责
+「职责」列取自各文件内嵌的 docstring / 头部注释，未提供的如实标注，不做推断。
+| 文件 | 语言 | 行数 | 字节 | 职责 |
+| --- | --- | ---: | ---: | --- |
+| `.gitignore` | GitIgnore | 34 | 325 | Dependencies |
+| `CLAUDE.md` | Markdown | 78 | 2538 | CLAUDE.md |
+| `LICENSE` | Other | 21 | 1088 | 未提供内嵌说明，见源码 |
+| `README.md` | Markdown | 309 | 15205 | AI 工具安装器 |
+| `index.html` | HTML | 13 | 417 | 未提供内嵌说明，见源码 |
+| `package.json` | JSON | 37 | 996 | 未提供内嵌说明，见源码 |
+| `pnpm-lock.yaml` | YAML | 2524 | 87712 | 未提供内嵌说明，见源码 |
+| `postcss.config.js` | JavaScript | 6 | 81 | 未提供内嵌说明，见源码 |
+| `public/vite.svg` | Other | 3 | 328 | 未提供内嵌说明，见源码 |
+| `src-tauri/Cargo.lock` | Other | 4790 | 117247 | This file is automatically @generated by Cargo. It is not intended for manual editing. |
+| `src-tauri/Cargo.toml` | TOML | 20 | 482 | 未提供内嵌说明，见源码 |
+| `src-tauri/build.rs` | Rust | 3 | 40 | 未提供内嵌说明，见源码 |
+| `src-tauri/capabilities/default.json` | JSON | 12 | 252 | 未提供内嵌说明，见源码 |
+| `src-tauri/gen/schemas/acl-manifests.json` | JSON | 1 | 71449 | 未提供内嵌说明，见源码 |
+| `src-tauri/gen/schemas/capabilities.json` | JSON | 1 | 185 | 未提供内嵌说明，见源码 |
+| `src-tauri/gen/schemas/desktop-schema.json` | JSON | 2612 | 133493 | 未提供内嵌说明，见源码 |
+| `src-tauri/gen/schemas/windows-schema.json` | JSON | 2612 | 133493 | 未提供内嵌说明，见源码 |
+| `src-tauri/icons/icon.ico` | Binary | — | 248 | 未提供内嵌说明，见源码 |
+| `src-tauri/icons/icon.png` | Binary | — | 226 | 未提供内嵌说明，见源码 |
+| `src-tauri/src/commands.rs` | Rust | 611 | 21804 | 未提供内嵌说明，见源码 |
+| `src-tauri/src/lib.rs` | Rust | 20 | 589 | 未提供内嵌说明，见源码 |
+| `src-tauri/src/main.rs` | Rust | 5 | 115 | 未提供内嵌说明，见源码 |
+| `src-tauri/tauri.conf.json` | JSON | 44 | 935 | 未提供内嵌说明，见源码 |
+| `src/App.tsx` | TypeScript | 11 | 223 | 未提供内嵌说明，见源码 |
+| `src/components/Installer.tsx` | TypeScript | 528 | 19571 | 未提供内嵌说明，见源码 |
+| `src/index.css` | CSS | 51 | 939 | 未提供内嵌说明，见源码 |
+| `src/lib/utils.ts` | TypeScript | 6 | 169 | 未提供内嵌说明，见源码 |
+| `src/main.tsx` | TypeScript | 10 | 250 | 未提供内嵌说明，见源码 |
+| `src/vite-env.d.ts` | TypeScript | 1 | 38 | 未提供内嵌说明，见源码 |
+| `tailwind.config.js` | JavaScript | 27 | 593 | 未提供内嵌说明，见源码 |
+| `tsconfig.json` | JSON | 21 | 564 | 未提供内嵌说明，见源码 |
+| `tsconfig.node.json` | JSON | 10 | 213 | 未提供内嵌说明，见源码 |
+| `vite.config.ts` | TypeScript | 20 | 420 | 未提供内嵌说明，见源码 |
+
+## 依赖清单
+`package.json` 原文：
+```text
+{
+  "name": "claude-installer",
+  "version": "1.0.0",
+  "description": "Claude Code 一键安装器",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-shell": "^2.2.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.542.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.3.0",
+    "vite": "^7.3.0"
+  }
+}
+```
+`src-tauri/Cargo.toml` 原文：
+```text
+[package]
+name = "claude-installer"
+version = "1.0.0"
+description = "Claude Code 一键安装器"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "claude_installer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process"] }
+```
+
+## 运行前提
+- Node.js 与 pnpm（见 `package.json`，锁文件 `pnpm-lock.yaml`）
+- Rust 工具链与 Tauri v2 系统依赖（见 `src-tauri/Cargo.toml`）
+
+另：生成与校验本文档的工具链需要 Python 3.9+、`git`，以及 `gh` CLI 登录或 `GITHUB_TOKEN` / `GH_TOKEN` 环境变量。
+
+## 安装
+```bash
+# 前提：Node.js + pnpm、Rust 工具链、Tauri v2 系统依赖（Windows 需 WebView2）
+pnpm install
+# Rust 依赖由 cargo 在首次 pnpm tauri dev / build 时拉取
+# 构建安装器还需 NSIS（Tauri 默认自动下载）
+```
+
+## 快速开始
+```bash
+# 开发：前端热重载 + Rust 后端，弹出 900x600 应用窗口
+pnpm tauri dev
+
+# 只跑前端开发服务器（Vite，默认 http://localhost:1420）
+pnpm dev
+
+# 生产构建：先 tsc && vite build，再由 Tauri 打包 NSIS 安装包
+pnpm tauri build
+
+# 产物路径：src-tauri/target/release/bundle/nsis/
+```
+
+## 可用命令
+下表由 `package.json` 的 `scripts` 字段抽取，与源码同步。
+| 命令 | 脚本 |
+| --- | --- |
+| `pnpm dev` | `vite` |
+| `pnpm build` | `tsc && vite build` |
+| `pnpm preview` | `vite preview` |
+| `pnpm tauri` | `tauri` |
+
+## 文档生成与发布流水线
+以下描述的是**生成本 README 的工具链流程**，不是本项目的运行流程。
+```text
+1. inspect_project.py   遍历项目 → project_facts.json（含 source_hash）
+2. generate_readme.py   重新遍历校验指纹 → 一致才写 README.md
+3. github_client.py     取指定账号令牌 → whoami → 创建公开仓库
+4. publish.py          只 add --files 指定的文件 → commit → push
+5. cli.py              串起 1→4，每步输出「已完成 / 下一步」
+```
+
+步骤 2 是硬门禁：没有 facts、或源码在读完之后被改动过，生成器以退出码 2 终止，不会产出一份看起来很完整但和代码对不上的文档。
+
+## 发布工具：多 GitHub 账号共存
+`--account <login>` 通过 `gh auth token --user <login>` 取该账号令牌，**不执行 `gh auth switch`**，因此不改变全局 active 账号；不同仓库可以用不同身份推送。
+```bash
+# 追加登录另一个账号：再跑一次 gh auth login，gh 会并列保存，不覆盖已有账号
+gh auth login -h github.com --web
+# 或用 PAT 非交互登录（令牌从标准输入读，不出现在命令行里）
+gh auth login -h github.com --with-token < mytoken.txt
+gh auth status                          # 查看并列账号
+gh auth switch --user ACCOUNT_B         # 仅需要改全局默认时才用
+# 下面这条在 github-open-source-publisher 工具仓库中执行（被开源项目本身不含这些脚本）
+python scripts/cli.py --root . --account ACCOUNT_B --repo ai-cli-installer --visibility public
+```
+
+注意：`gh auth login` 没有 `-u/--user` 参数，账号由浏览器或 PAT 自动识别；`--user` 属于 `gh auth switch` / `gh auth logout` / `gh auth token`。
+
+凭据只进入内存与单次 `git push` 的 `http.extraHeader`，不写入 `.git/config`，也不出现在日志里。
+
+## 验证方法
+```bash
+# 1) 依赖与 TypeScript 前端构建
+pnpm install
+pnpm build            # 预期：dist/ 生成 index.html 与 assets/
+
+# 2) 桌面窗口
+pnpm tauri dev        # 预期：弹出标题为「AI 工具安装器」的窗口
+#                     # 左侧 9 张工具卡片，右侧安装日志面板
+
+# 3) 生产安装包
+pnpm tauri build      # 预期：src-tauri/target/release/bundle/nsis/ 下生成 .exe
+
+# 4) 文档与源码一致性（本仓库 README 由源码指纹门禁生成）
+#    改动任一源码文件后重跑生成器，预期退出码 2 并打印「拒绝生成：源码已变更」
+```
+
+## 测试
+项目中未发现 `tests/` 下的测试文件；验证方法见上一节。
+
+## 发布目标
+| 项 | 值 |
+| --- | --- |
+| 仓库 | `lisijia666-sketch/ai-cli-installer` |
+| 可见性 | public |
+| 默认分支 | `main` |
+| `--files` 白名单 | `.gitignore`、`CLAUDE.md`、`README.md`、`LICENSE`、`index.html`、`package.json`、`pnpm-lock.yaml`、`postcss.config.js`、`tailwind.config.js`、`tsconfig.json`、`tsconfig.node.json`、`vite.config.ts`、`public/vite.svg`、`src/*`、`src/components/*`、`src/lib/*`、`src-tauri/Cargo.lock`、`src-tauri/Cargo.toml`、`src-tauri/build.rs`、`src-tauri/tauri.conf.json`、`src-tauri/capabilities/*`、`src-tauri/gen/schemas/*`、`src-tauri/icons/*`、`src-tauri/src/*` |
+
+只有 `--files` 命中的路径会被 `git add`，未列出的本地文件不会进入提交。
+
+## 许可证
+见 `LICENSE`。
